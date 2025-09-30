@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>食堂阿姨之我要赚外快</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 游戏开始界面 -->
+  <div id="startScreen" class="start-screen">
+    <div class="start-background">
+      <div class="start-ui-container">
+        <div id="startUI" class="start-ui"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 游戏界面 -->
+  <div id="gameScreen" class="game-screen" style="display: none;">
+    <div class="game-container">
+      <canvas id="game" width="540" height="960"></canvas>
+      
+      <!-- 设置按钮与面板 -->
+      <button id="settingsBtn" class="settings-button">设置</button>
+      <div id="settingsPanel" class="settings-panel" style="display:none;">
+        <div class="settings-row">
+          <label class="settings-label">
+            <input type="checkbox" id="musicToggle" checked>
+            音乐
+          </label>
+          <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.8">
+        </div>
+        <div class="settings-row">
+          <label class="settings-label">
+            <input type="checkbox" id="sfxToggle" checked>
+            音效
+          </label>
+          <input type="range" id="sfxVolume" min="0" max="1" step="0.01" value="0.8">
+        </div>
+      </div>
+      
+      <!-- 外快显示区域 -->
+      <div class="earnings-display-overlay">
+        <div class="earnings-card">
+          <div class="earnings-header">
+            <span class="earnings-label">已赚外快</span>
+          </div>
+          <div class="earnings-amount-container">
+            <span id="earningsAmount" class="earnings-amount">0.00</span>
+            <span class="earnings-currency">元</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新手引导弹窗 -->
+    <div id="tutorialModal" class="tutorial-modal" style="display: none;">
+      <div class="tutorial-modal-content">
+        <h3 id="tutorialTitle" class="tutorial-title"></h3>
+        <img id="tutorialImage" class="tutorial-image" style="display:none;" alt="教程图片" />
+        <p id="tutorialMessage" class="tutorial-message"></p>
+        <div id="tutorialMessages" class="tutorial-messages"></div>
+        <div class="tutorial-buttons">
+          <button id="tutorialButton" class="tutorial-button"></button>
+          <button id="skipTutorialBtn" class="skip-tutorial-button">跳过教程</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="main.js"></script>
+</body>
+</html>
