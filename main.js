@@ -545,6 +545,15 @@
   // ========== 游戏元素统一配置区域结束 ==========
   // ========== 配置区域结束 ==========
 
+  // 学生思考文字数组
+  const THINKING_TEXTS = [
+    '嗯...饭好了吗',
+    '饿了...',
+    '要不要多点一些...',
+    '炖肉...嘿嘿...',
+    '怎么这么久...'
+  ];
+
   // Game state
   const game = {
     running: true,
@@ -669,7 +678,9 @@
     patienceDecreasePerSec: 0.28, // 转头时减少(变绿) - 将在切换时重随机
     attentionState: 'looking', // or 'distracted'
     nextToggleT: 0,
-    state: 'entering', // entering -> ordering -> waiting -> thanking -> leaving
+    state: 'entering', // entering -> ordering -> waiting -> thinking -> thanking -> leaving
+    thinkingUntil: 0, // 思考状态结束时间
+    thinkingText: '', // 当前思考文字
     targetX: W * GAME_ELEMENTS_CONFIG.STUDENT.targetX,
     speed: GAME_ELEMENTS_CONFIG.STUDENT.speed,
     needScoops: 0,
@@ -869,7 +880,7 @@
     student.patienceDecreasePerSec = randRange(CONFIG.STUDENT.distractionSpeedRange[0], CONFIG.STUDENT.distractionSpeedRange[1]);
     inspector.x = GAME_ELEMENTS_CONFIG.INSPECTOR.initialX; inspector.y = H * GAME_ELEMENTS_CONFIG.INSPECTOR.y - GAME_ELEMENTS_CONFIG.INSPECTOR.height; inspector.dir = 1; inspector.isActive = false; inspector.nextAppearT = 2; inspector.vanishT = 0; inspector.currentImage = 'standby'; inspector.angryUntil = 0;
     plateDrag.x = plate.x; plateDrag.y = plate.y; plateDrag.dragging = false; plateDrag.taken = false; plateFill.total = 0; plateFill.scoops = 0;
-    student.x = GAME_ELEMENTS_CONFIG.STUDENT.initialX; student.state = 'entering'; student.needScoops = Math.floor(randRange(CONFIG.STUDENT.needScoopsRange[0], CONFIG.STUDENT.needScoopsRange[1])); student.deliveredScoops = 0; student.deliveredTotalFill = 0; student.targetX = W * GAME_ELEMENTS_CONFIG.STUDENT.targetX; student.deliveryPatience = 0; student.deliveryPatienceMax = 0;
+    student.x = GAME_ELEMENTS_CONFIG.STUDENT.initialX; student.state = 'entering'; student.needScoops = Math.floor(randRange(CONFIG.STUDENT.needScoopsRange[0], CONFIG.STUDENT.needScoopsRange[1])); student.deliveredScoops = 0; student.deliveredTotalFill = 0; student.targetX = W * GAME_ELEMENTS_CONFIG.STUDENT.targetX; student.deliveryPatience = 0; student.deliveryPatienceMax = 0; student.thinkingUntil = 0; student.thinkingText = '';
     
     // 重置新手引导状态
     tutorial.isActive = false;
@@ -1679,6 +1690,12 @@
           student.patienceIncreasePerSec = randRange(CONFIG.STUDENT.attentionSpeedRange[0], CONFIG.STUDENT.attentionSpeedRange[1]);
           student.patienceDecreasePerSec = randRange(CONFIG.STUDENT.distractionSpeedRange[0], CONFIG.STUDENT.distractionSpeedRange[1]);
         }
+      } else if (student.state === 'thinking') {
+        // 思考状态：1秒后进入盯着你状态
+        if (game.time >= student.thinkingUntil) {
+          student.state = 'waiting';
+          student.attentionState = 'looking';
+        }
       } else if (student.state === 'thanking') {
         // 停留一小会儿说谢谢
         if (game.time >= student.thanksUntil) {
@@ -1698,8 +1715,8 @@
         }
       }
 
-      // 交付耐心条：仅在等待状态下降低
-      if (student.state === 'waiting') {
+      // 交付耐心条：在等待和思考状态下降低
+      if (student.state === 'waiting' || student.state === 'thinking') {
         student.deliveryPatience = clamp(student.deliveryPatience - dt, 0, student.deliveryPatienceMax);
         if (student.deliveryPatience <= 0) {
           lose(CONFIG.FAIL_MESSAGES.patienceTimeout);
@@ -1708,7 +1725,15 @@
 
       // Attention toggle every 2-5s randomly, and randomize vigilance speeds each time
       if (student.state === 'waiting' && game.time >= student.nextToggleT) {
-        student.attentionState = student.attentionState === 'looking' ? 'distracted' : 'looking';
+        if (student.attentionState === 'looking') {
+          // 从盯着你切换到转头，直接切换
+          student.attentionState = 'distracted';
+        } else {
+          // 从转头切换到盯着你，先进入1秒思考状态
+          student.state = 'thinking';
+          student.thinkingUntil = game.time + 1.0; // 1秒思考时间
+          student.thinkingText = THINKING_TEXTS[Math.floor(Math.random() * THINKING_TEXTS.length)];
+        }
         student.nextToggleT = game.time + randRange(CONFIG.STUDENT.attentionToggleRange[0], CONFIG.STUDENT.attentionToggleRange[1]);
         student.patienceIncreasePerSec = randRange(CONFIG.STUDENT.attentionSpeedRange[0], CONFIG.STUDENT.attentionSpeedRange[1]);
         student.patienceDecreasePerSec = randRange(CONFIG.STUDENT.distractionSpeedRange[0], CONFIG.STUDENT.distractionSpeedRange[1]);
@@ -1787,7 +1812,7 @@
         plateFill.total += spoon.fillAmount;
         plateFill.scoops += 1;
         // 每倒一勺菜给3秒耐心时间
-        if (student.state === 'waiting') {
+        if (student.state === 'waiting' || student.state === 'thinking') {
           student.deliveryPatience = clamp(student.deliveryPatience + CONFIG.STUDENT.patiencePerScoop, 0, student.deliveryPatienceMax);
         }
       }
@@ -1799,7 +1824,7 @@
       const plateMask = getCollisionMask('plate', COLLISION_CONFIG.plate);
       const studentMask = getCollisionMask('student', COLLISION_CONFIG.student);
       
-      if (checkCollisionMaskOverlap(plateMask, studentMask) && student.state === 'waiting' && !plateDrag.taken && plateDrag.dragging) {
+      if (checkCollisionMaskOverlap(plateMask, studentMask) && (student.state === 'waiting' || student.state === 'thinking') && !plateDrag.taken && plateDrag.dragging) {
         const need = Math.max(1, student.needScoops);
         const percent = need > 0 ? (plateFill.total / need) : 0;
         const hasEnoughScoops = plateFill.scoops >= need;
@@ -1930,8 +1955,8 @@
 
           // Fail conditions（只在触发抖动时判定，且仅在正式游戏模式下）
           if (game.state === 'playing') {
-            // 检查是否被学生盯着
-            if (student.attentionState === 'looking') {
+            // 检查是否被学生盯着（思考状态下允许抖菜，但需要结合学生干部判定）
+            if (student.attentionState === 'looking' && student.state !== 'thinking') {
               lose(CONFIG.FAIL_MESSAGES.studentSeen);
               playSfx('fail');
               return; // 立即返回，不继续执行后续逻辑
@@ -2154,6 +2179,9 @@
         } else {
           studentImage = studentImages.watchingPhone; // 转头时显示watching phone图片
         }
+      } else if (student.state === 'thinking') {
+        // 思考状态显示watching phone图片
+        studentImage = studentImages.watchingPhone;
       } else if (student.state === 'thanking') {
         // 感谢时根据交付结果选择图片
         if (student.overServed === 'failed') {
@@ -2181,7 +2209,7 @@
       const barW = 120, barH = 10;
       const bx = student.x - barW / 2;
       const by = student.y - student.h - 18;
-      if (student.state === 'waiting' && student.deliveryPatienceMax > 0) {
+      if ((student.state === 'waiting' || student.state === 'thinking') && student.deliveryPatienceMax > 0) {
         ctx.fillStyle = '#333'; ctx.fillRect(bx, by, barW, barH);
         const patienceRatio = student.deliveryPatience / student.deliveryPatienceMax;
         ctx.fillStyle = patienceRatio > 0.3 ? '#4caf50' : '#e53935';
@@ -2202,10 +2230,49 @@
         ctx.fillStyle = color; ctx.font = 'bold 18px system-ui, sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(tipText, student.x, ty + 23);
         ctx.lineWidth = 1;
+      } else if (student.state === 'thinking') {
+        // 思考气泡和文字（显示在左边）
+        const bubbleW = 140, bubbleH = 50;
+        const bubbleX = student.x - bubbleW - 20; // 显示在学生左边
+        const bubbleY = by - 20;
+        
+        // 绘制思考气泡
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        
+        // 云朵型气泡主体（圆角矩形）
+        const radius = 15;
+        ctx.beginPath();
+        ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, radius);
+        ctx.fill();
+        ctx.stroke();
+        
+        // 小圆型气泡（靠近学生）
+        const smallCircleX = student.x - 15;
+        const smallCircleY = by - 5;
+        const smallCircleRadius = 8;
+        
+        ctx.beginPath();
+        ctx.arc(smallCircleX, smallCircleY, smallCircleRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // 连接线（从小圆到大气泡）
+        ctx.beginPath();
+        ctx.moveTo(smallCircleX + smallCircleRadius, smallCircleY);
+        ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH/2);
+        ctx.stroke();
+        
+        // 思考文字
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(student.thinkingText, bubbleX + bubbleW/2, bubbleY + 30);
       }
 
-      // 学生点单提示：明确显示点了多少勺（在点菜和等待状态时显示）
-      if ((student.state === 'ordering' || student.state === 'waiting') && student.needScoops > 0) {
+      // 学生点单提示：明确显示点了多少勺（在点菜、等待和思考状态时显示）
+      if ((student.state === 'ordering' || student.state === 'waiting' || student.state === 'thinking') && student.needScoops > 0) {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         const tipW = 96, tipH = 26;
         const tipX = student.x - tipW/2;
@@ -2238,7 +2305,7 @@
       }
 
       // 可视化学生碰撞区域（半透明，便于调试）
-      if (student.state === 'waiting') {
+      if (student.state === 'waiting' || student.state === 'thinking') {
         ctx.fillStyle = 'rgba(255,255,255,0.06)';
         ctx.fillRect(student.x, student.y, student.w, student.h);
       }
